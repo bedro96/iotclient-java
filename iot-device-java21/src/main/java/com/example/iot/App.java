@@ -3,6 +3,9 @@ package com.example.iot;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import com.microsoft.azure.sdk.iot.device.DeviceClient;
 import com.microsoft.azure.sdk.iot.device.IotHubClientProtocol;
@@ -29,6 +32,9 @@ public class App{
     private static final int INITIAL_RETRY_DELAY_SECONDS = 30;
     private static final int MAX_RETRY_DELAY_SECONDS = 960; // Max ~16 minutes
     private static final int MAX_RETRIES = 10;
+    
+    // Scheduler for async retry operations
+    private static final ScheduledExecutorService retryScheduler = Executors.newScheduledThreadPool(1);
 
     public static void main(String[] args) throws Exception {
         if (IOTHUB_DEVICE_CONNECTION_STRING == null || IOTHUB_DEVICE_CONNECTION_STRING.isBlank()) {
@@ -40,7 +46,10 @@ public class App{
         DeviceClient client = new DeviceClient(IOTHUB_DEVICE_CONNECTION_STRING, PROTOCOL);
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            try { client.close(); } catch (Exception ignored) {}
+            try { 
+                retryScheduler.shutdown();
+                client.close(); 
+            } catch (Exception ignored) {}
         }));
 
         // Connect with retry logic
@@ -65,6 +74,7 @@ public class App{
         }
         latch.await();
         System.out.println("Done. Closing.");
+        retryScheduler.shutdown();
         client.close();
     }
     
@@ -116,15 +126,11 @@ public class App{
                     System.err.printf("Message send failed (attempt %d/%d): %s%n", 
                         currentRetry + 1, MAX_RETRIES, clientException.getMessage());
                     System.out.printf("Retrying in %d seconds...%n", currentDelay);
-                    try {
-                        Thread.sleep(currentDelay * 1000L);
-                        int nextDelay = Math.min(currentDelay * 2, MAX_RETRY_DELAY_SECONDS);
-                        sendMessageWithRetryInternal(client, msg, latch, currentRetry + 1, nextDelay);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        System.err.printf("Message ack: FAILED - %s%n", clientException.getMessage());
-                        latch.countDown();
-                    }
+                    int nextDelay = Math.min(currentDelay * 2, MAX_RETRY_DELAY_SECONDS);
+                    // Schedule retry asynchronously to avoid blocking callback thread
+                    retryScheduler.schedule(
+                        () -> sendMessageWithRetryInternal(client, msg, latch, currentRetry + 1, nextDelay),
+                        currentDelay, TimeUnit.SECONDS);
                 } else {
                     System.err.printf("Message ack: FAILED after %d retries - %s%n", 
                         MAX_RETRIES, clientException.getMessage());
