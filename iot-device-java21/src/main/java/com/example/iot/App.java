@@ -11,12 +11,24 @@ import com.microsoft.azure.sdk.iot.device.Message;
 
 public class App{
 
+    // SDK version info
+    private static final String SDK_VERSION = "1.0.0";
+    
+    // Device identification
+    private static final String DEVICE_ID = System.getenv().getOrDefault("DEVICE_ID", "java-iot-device");
+    private static final String MODEL_ID = System.getenv().getOrDefault("MODEL_ID", "dtmi:com:example:iotdevice;1");
+
     // 보안을 위해 환경변수로 받아 사용 (직접 문자열 하드코딩 지양)
     // 설정: export IOTHUB_DEVICE_CONNECTION_STRING="HostName=...;DeviceId=...;SharedAccessKey=..."
     private static final String IOTHUB_DEVICE_CONNECTION_STRING = System.getenv("IOTHUB_DEVICE_CONNECTION_STRING");
 
     // MQTT 권장 (방화벽 포트 8883 필요) [5](https://learn.microsoft.com/en-us/azure/iot/tutorial-send-telemetry-iot-hub)
     private static final IotHubClientProtocol PROTOCOL = IotHubClientProtocol.MQTT;
+    
+    // Retry configuration
+    private static final int INITIAL_RETRY_DELAY_SECONDS = 30;
+    private static final int MAX_RETRY_DELAY_SECONDS = 960; // Max ~16 minutes
+    private static final int MAX_RETRIES = 10;
 
     public static void main(String[] args) throws Exception {
         if (IOTHUB_DEVICE_CONNECTION_STRING == null || IOTHUB_DEVICE_CONNECTION_STRING.isBlank()) {
@@ -31,29 +43,94 @@ public class App{
             try { client.close(); } catch (Exception ignored) {}
         }));
 
-        System.out.println("Opening connection to IoT Hub ...");
-        client.open(true);
-        System.out.println("Connected.");
+        // Connect with retry logic
+        connectWithRetry(client);
+
         // 간단한 텔레메트리 5건 전송
         CountDownLatch latch = new CountDownLatch(5);
         for (int i = 0; i < 5; i++) {
-            String payload = String.format("{\"temp\": %d, \"ts\": \"%s\"}", 20 + i, Instant.now());
+            String payload = String.format(
+                "{\"temp\": %d, \"ts\": \"%s\", \"sdkVersion\": \"%s\", \"deviceId\": \"%s\", \"modelId\": \"%s\"}",
+                20 + i, Instant.now(), SDK_VERSION, DEVICE_ID, MODEL_ID);
             Message msg = new Message(payload.getBytes(StandardCharsets.UTF_8));
             msg.setContentType("application/json");
             msg.setProperty("level", "info");
-            client.sendEventAsync(msg, (sentMessage, clientException, callbackContext) -> {
-                if (clientException == null) {
-                    System.out.printf("Message ack: SUCCESS%n");
-                } else {
-                    System.out.printf("Message ack: FAILED - %s%n", clientException.getMessage());
-                }
-                latch.countDown();
-            }, null);
+            msg.setProperty("sdkVersion", SDK_VERSION);
+            msg.setProperty("deviceId", DEVICE_ID);
+            msg.setProperty("modelId", MODEL_ID);
+            
+            sendMessageWithRetry(client, msg, latch);
 
             Thread.sleep(1000);
         }
         latch.await();
         System.out.println("Done. Closing.");
         client.close();
+    }
+    
+    /**
+     * Connect to IoT Hub with exponential backoff retry logic.
+     * Starts with 30 seconds delay and doubles each retry up to max delay.
+     */
+    private static void connectWithRetry(DeviceClient client) throws Exception {
+        int retryCount = 0;
+        int currentDelay = INITIAL_RETRY_DELAY_SECONDS;
+        
+        while (retryCount < MAX_RETRIES) {
+            try {
+                System.out.println("Opening connection to IoT Hub ...");
+                client.open(true);
+                System.out.println("Connected.");
+                return; // Success, exit the retry loop
+            } catch (Exception e) {
+                retryCount++;
+                if (retryCount >= MAX_RETRIES) {
+                    System.err.printf("Failed to connect after %d attempts. Giving up.%n", MAX_RETRIES);
+                    throw e;
+                }
+                System.err.printf("Connection failed (attempt %d/%d): %s%n", retryCount, MAX_RETRIES, e.getMessage());
+                System.out.printf("Retrying in %d seconds...%n", currentDelay);
+                Thread.sleep(currentDelay * 1000L);
+                // Exponential backoff: double the delay for next retry
+                currentDelay = Math.min(currentDelay * 2, MAX_RETRY_DELAY_SECONDS);
+            }
+        }
+    }
+    
+    /**
+     * Send message with retry logic for network disruptions.
+     * Uses exponential backoff starting at 30 seconds.
+     */
+    private static void sendMessageWithRetry(DeviceClient client, Message msg, CountDownLatch latch) {
+        sendMessageWithRetryInternal(client, msg, latch, 0, INITIAL_RETRY_DELAY_SECONDS);
+    }
+    
+    private static void sendMessageWithRetryInternal(DeviceClient client, Message msg, CountDownLatch latch, 
+                                                      int currentRetry, int currentDelay) {
+        client.sendEventAsync(msg, (sentMessage, clientException, callbackContext) -> {
+            if (clientException == null) {
+                System.out.printf("Message ack: SUCCESS%n");
+                latch.countDown();
+            } else {
+                if (currentRetry < MAX_RETRIES) {
+                    System.err.printf("Message send failed (attempt %d/%d): %s%n", 
+                        currentRetry + 1, MAX_RETRIES, clientException.getMessage());
+                    System.out.printf("Retrying in %d seconds...%n", currentDelay);
+                    try {
+                        Thread.sleep(currentDelay * 1000L);
+                        int nextDelay = Math.min(currentDelay * 2, MAX_RETRY_DELAY_SECONDS);
+                        sendMessageWithRetryInternal(client, msg, latch, currentRetry + 1, nextDelay);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        System.err.printf("Message ack: FAILED - %s%n", clientException.getMessage());
+                        latch.countDown();
+                    }
+                } else {
+                    System.err.printf("Message ack: FAILED after %d retries - %s%n", 
+                        MAX_RETRIES, clientException.getMessage());
+                    latch.countDown();
+                }
+            }
+        }, null);
     }
 }
