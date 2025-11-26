@@ -61,13 +61,24 @@ jobs:
           type=ref,event=pr
           type=raw,value=latest,enable={{is_default_branch}}
     
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v5
+
+    # Buildx를 docker-container 드라이버로 설정
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      with:
+        driver: docker-container
+        use: true
+
+    # 캐시를 GitHub Actions 백엔드(type=gha)에 저장/불러오기
+    - name: Build and Push
+      uses: docker/build-push-action@v6
       with:
         context: .
         platforms: linux/amd64
         push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+        tags: |
+          kunhoregistry.azurecr.io/iot-client-java21:main
+          kunhoregistry.azurecr.io/iot-client-java21:latest
+          kunhoregistry.azurecr.io/iot-client-java21:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
