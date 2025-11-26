@@ -14,9 +14,6 @@ import com.microsoft.azure.sdk.iot.device.Message;
 
 public class App{
 
-    // SDK version info
-    private static final String SDK_VERSION = "1.0.0";
-    
     // Device identification
     private static final String DEVICE_ID = System.getenv().getOrDefault("DEVICE_ID", "java-iot-device");
     private static final String MODEL_ID = System.getenv().getOrDefault("MODEL_ID", "dtmi:com:example:iotdevice;1");
@@ -45,6 +42,7 @@ public class App{
 
         DeviceClient client = new DeviceClient(IOTHUB_DEVICE_CONNECTION_STRING, PROTOCOL);
 
+        // Graceful shutdown hook
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             try { 
                 retryScheduler.shutdown();
@@ -52,19 +50,18 @@ public class App{
             } catch (Exception ignored) {}
         }));
 
-        // Connect with retry logic
+        // Connect with retry logic with exponential backoff
         connectWithRetry(client);
 
         // 간단한 텔레메트리 5건 전송
         CountDownLatch latch = new CountDownLatch(5);
         for (int i = 0; i < 5; i++) {
             String payload = String.format(
-                "{\"temp\": %d, \"ts\": \"%s\", \"sdkVersion\": \"%s\", \"deviceId\": \"%s\", \"modelId\": \"%s\"}",
-                20 + i, Instant.now(), SDK_VERSION, DEVICE_ID, MODEL_ID);
+                "{\"temp\": %d, \"ts\": \"%s\", \"deviceId\": \"%s\", \"modelId\": \"%s\"}",
+                20 + i, Instant.now(), DEVICE_ID, MODEL_ID);
             Message msg = new Message(payload.getBytes(StandardCharsets.UTF_8));
             msg.setContentType("application/json");
             msg.setProperty("level", "info");
-            msg.setProperty("sdkVersion", SDK_VERSION);
             msg.setProperty("deviceId", DEVICE_ID);
             msg.setProperty("modelId", MODEL_ID);
             
