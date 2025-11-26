@@ -16,7 +16,7 @@ on:
 
 permissions:
   contents: write
-  id-token: read   # 클라우드 인증이 필요하면 추가
+  id-token: write   # 클라우드 인증이 필요하면 추가
   
 jobs:
   build:
