@@ -15,7 +15,7 @@ import com.microsoft.azure.sdk.iot.device.Message;
 public class App{
 
     // Device identification
-    private static final String DEVICE_ID = System.getenv().getOrDefault("DEVICE_ID", "java-iot-device");
+    private static final String DEVICE_ID = System.getenv().getOrDefault("DEVICE_ID", "javadevice001");
     private static final String MODEL_ID = System.getenv().getOrDefault("MODEL_ID", "dtmi:com:example:iotdevice");
 
     // 보안을 위해 환경변수로 받아 사용 (직접 문자열 하드코딩 지양)
