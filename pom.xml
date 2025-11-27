@@ -72,7 +72,7 @@
           <archive>
             <manifest>
               <addClasspath>true</addClasspath>
-              <mainClass>com.example.iot.App</mainClass>
+              <mainClass>com.example.iot.SimulatorWSClient</mainClass>
             </manifest>
           </archive>
         </configuration>
@@ -107,7 +107,7 @@
               <transformers>
                 <!-- Ensure manifest contains the main class -->
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                  <mainClass>com.example.iot.App</mainClass>
+                  <mainClass>com.example.iot.SimulatorWSClient</mainClass>
                 </transformer>
                 <!-- Merge service provider files -->
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
