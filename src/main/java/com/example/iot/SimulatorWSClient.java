@@ -22,8 +22,8 @@ public class SimulatorWSClient {
 
 // 서버 주소 및 deviceId (필요에 따라 동적으로 할당 가능)
 private static final String SERVER_URI = "wss://iot-service-server.wonderfulrock-1223eeed.koreacentral.azurecontainerapps.io/ws/";
-private static final String DEVICE_ID = "device123"; // 실제 환경에서는 서버에서 받아올 수 있음
-private String DEVICE_UUID = get_UuidString();
+private String DEVICE_ID = "device123"; // 실제 환경에서는 서버에서 받아올 수 있음
+private static final String DEVICE_UUID = get_UuidString();
 private String MESSAGE_ID;
 private String TIMESTAMP;
 private String received_DEVICE_ID;
@@ -144,7 +144,7 @@ public void sendMessage(MessageType messageType, String status, String correlati
 public static void main(String[] args) {
     try {
         WebSocketContainer container = ContainerProvider.getWebSocketContainer();
-        String uri = SERVER_URI + DEVICE_ID;
+        String uri = SERVER_URI + DEVICE_UUID;
 
         container.connectToServer(SimulatorWSClient.class, URI.create(uri));
         latch.await(); // 연결 종료까지 대기
@@ -153,7 +153,7 @@ public static void main(String[] args) {
         }
     }
 
-public String get_UuidString() { return UUID.randomUUID().toString();}
+public static String get_UuidString() { return UUID.randomUUID().toString();}
 
 public String get_Timestamp() {
     // IOS8601 형식의 타임스탬프 생성 및 반환
