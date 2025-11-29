@@ -91,7 +91,7 @@ public static void main(String[] args) {
         WebSocketContainer container = ContainerProvider.getWebSocketContainer();
         String uri = SERVER_URI + DEVICE_ID;
 
-        container.connectToServer(IoTClient.class, URI.create(uri));
+        container.connectToServer(SimulatorWSClient.class, URI.create(uri));
         latch.await(); // 연결 종료까지 대기
         } catch (Exception e) {
         e.printStackTrace();
