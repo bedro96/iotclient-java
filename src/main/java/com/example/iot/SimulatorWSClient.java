@@ -1,8 +1,18 @@
 package com.example.iot;
 
-import javax.websocket.*;
 import java.net.URI;
 import java.util.concurrent.CountDownLatch;
+
+import javax.websocket.ClientEndpoint;
+import javax.websocket.CloseReason;
+import javax.websocket.ContainerProvider;
+import javax.websocket.OnClose;
+import javax.websocket.OnError;
+import javax.websocket.OnMessage;
+import javax.websocket.OnOpen;
+import javax.websocket.Session;
+import javax.websocket.WebSocketContainer;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -10,7 +20,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class SimulatorWSClient {
 
 // 서버 주소 및 deviceId (필요에 따라 동적으로 할당 가능)
-private static final String SERVER_URI = "ws://https://iot-service-server.wonderfulrock-1223eeed.koreacentral.azurecontainerapps.io/ws/";
+private static final String SERVER_URI = "wss://iot-service-server.wonderfulrock-1223eeed.koreacentral.azurecontainerapps.io/ws/";
 private static final String DEVICE_ID = "device123"; // 실제 환경에서는 서버에서 받아올 수 있음
 private String received_DEVICED_ID;
 
