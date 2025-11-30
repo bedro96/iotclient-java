@@ -1,10 +1,6 @@
 package com.example.iot;
 
 import java.net.URI;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
-import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 
@@ -67,68 +63,23 @@ private static Thread iotClientThread;
 @OnMessage
 public void onMessage(String message) {
     System.out.println("=== @OnMessage triggered ===");
-    System.out.println("onMessage thread: " + Thread.currentThread().getName());
-    System.out.println("This instance hashCode: " + this.hashCode());
-    System.out.println("Received from server: " + message);
-
-        // Append raw message to a local log for debugging (rotate/cleanup not handled here)
-        try {
-            String entry = String.format("%s [%s] %s%n", get_Timestamp(), Thread.currentThread().getName(), message);
-            Files.writeString(Path.of("/tmp/ws-messages.log"), entry, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-        } catch (Exception e) {
-            System.err.println("Failed to write raw WS message to /tmp/ws-messages.log: " + e.getMessage());
-        }
-
+    System.out.println("Received message: " + message);
     try {
         JsonNode json = objectMapper.readTree(message);
         String action = json.has("action") ? json.get("action").asText() : "";
-        // normalize to lowercase to avoid missing messages due to casing
-        action = action == null ? "" : action.trim().toLowerCase(Locale.ROOT);
-        System.out.println("Parsed action: '" + action + "'");
-        System.out.println("iotClient static reference: " + (iotClient != null ? "exists" : "null"));
 
         // 명령 처리
         switch (action) {
             case "device.start":
                 System.out.println("서비스 시작 명령 수신");
                 isReadytoSend = true;
-                synchronized (SimulatorWSClient.class) {
-                    if (iotClient == null) {
-                        System.out.println("iotClient가 null이므로 새로 생성합니다...");
-                        iotClient = new IotClient();
-                    }
-                    try {
-                        // Ensure the client is marked ready BEFORE starting the worker
-                        iotClient.setReadytoRun(true);
-                        System.out.println("iotClient.setReadytoRun(true) 호출 완료, worker state: " + iotClient.getWorkerState());
-                        // Start worker asynchronously so onMessage returns quickly and doesn't block websocket thread
-                        Thread starter = new Thread(() -> {
-                            try {
-                                iotClient.start();
-                                System.out.println("[async] iotClient.start() 호출 완료, worker state: " + iotClient.getWorkerState());
-                            } catch (Exception ex) {
-                                System.err.println("[async] iotClient.start() 오류: " + ex.getMessage());
-                                ex.printStackTrace();
-                            }
-                        }, "IotClient-Starter");
-                        starter.setDaemon(true);
-                        starter.start();
-                    } catch (Exception e) {
-                        System.err.println("iotClient 시작/설정 중 오류: " + e.getMessage());
-                        e.printStackTrace();
-                    }
-                }
+                
                 // 실제 서비스 시작 로직 구현
                 break;
         case "device.stop":
                 System.out.println("서비스 중단 명령 수신");
                 isReadytoSend = false;
-                if (iotClient != null) {
-                    iotClient.setReadytoRun(false);
-                    System.out.println("iotClient.setReadytoRun(false) 호출 완료");
-                } else {
-                    System.err.println("경고: iotClient가 null입니다!");
-                }
+
                 // 실제 서비스 중단 로직 구현
                 break;
         case "device.config.update":
@@ -183,33 +134,12 @@ public void onMessage(String message) {
 // 서버와 연결되었을 때
 @OnOpen
 public void onOpen(Session session) {
-    System.out.println("=== WebSocket Connected to server ===");
-    System.out.println("Session ID: " + session.getId());
-    System.out.println("Session isOpen: " + session.isOpen());
-    System.out.println("This instance hashCode: " + this.hashCode());
-    this.session = session;
-    
     // 서버에 초기 상태 보고
     System.out.println("Sending initial messages...");
+    this.session = session;
     sendMessage(MessageType.EVENT, "connected", "");
     sendMessage(MessageType.REQUEST, "device need device_id", "");
     
-    // IotClient 인스턴스 생성 및 초기화 (한 번만)
-    synchronized (SimulatorWSClient.class) {
-        if (iotClient == null) {
-            System.out.println("Initializing IotClient...");
-            iotClient = new IotClient();
-            System.out.println("IotClient instance created: " + (iotClient != null));
-        } else {
-            System.out.println("IotClient already initialized. Reusing existing instance.");
-        }
-    }
-    // Start IotClient worker thread (non-blocking)
-    try {
-        System.out.println("IotClient instance created; deferring start until device.start command is received.");
-    } catch (Exception e) {
-        System.err.println("Failed to start IotClient: " + e.getMessage());
-    }
 }
 
 // 서버와 연결이 종료되었을 때
@@ -276,31 +206,6 @@ public static void main(String[] args) {
         Session session = container.connectToServer(SimulatorWSClient.class, URI.create(uri));
         System.out.println("Connection established. Session ID: " + session.getId());
         System.out.println("Waiting for messages...");
-        // Start a small stdin listener for quick testing: type 'start' to simulate device.start
-        Thread stdinListener = new Thread(() -> {
-            try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.InputStreamReader(System.in))) {
-                String line;
-                while ((line = r.readLine()) != null) {
-                    if (line.trim().equalsIgnoreCase("start")) {
-                        System.out.println("[local] simulate device.start received via stdin");
-                        // perform same actions as device.start handler
-                        if (iotClient == null) {
-                            iotClient = new IotClient();
-                        }
-                        try {
-                            iotClient.setReadytoRun(true);
-                            Thread starter = new Thread(() -> { try { iotClient.start(); } catch (Exception ex) { ex.printStackTrace(); } }, "IotClient-Starter-stdin");
-                            starter.setDaemon(true);
-                            starter.start();
-                        } catch (Exception ex) {
-                            System.err.println("[local] error starting iotClient: " + ex.getMessage());
-                        }
-                    }
-                }
-            } catch (Exception e) { /* ignore */ }
-        }, "stdin-listener");
-        stdinListener.setDaemon(true);
-        stdinListener.start();
 
         latch.await(); // 연결 종료까지 대기
         System.out.println("WebSocket client terminated.");
