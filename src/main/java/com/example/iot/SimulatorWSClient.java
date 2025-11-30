@@ -57,8 +57,7 @@ private static CountDownLatch latch = new CountDownLatch(1);
 private static final ObjectMapper objectMapper = new ObjectMapper();
 
 // Static으로 변경하여 모든 인스턴스가 같은 iotClient를 공유
-private static IotClient iotClient;
-private static Thread iotClientThread;
+private static final IotClient iotClient = new IotClient();
 // 서버로부터 명령 수신
 @OnMessage
 public void onMessage(String message) {
@@ -73,12 +72,21 @@ public void onMessage(String message) {
             case "device.start":
                 System.out.println("서비스 시작 명령 수신");
                 isReadytoSend = true;
-                
-                // 실제 서비스 시작 로직 구현
+                iotClient.setReadytoRun(isReadytoSend);
+                // iotClient.run 실행시도록 별도 스레드에서 처리
+                    new Thread(() -> {
+                        try {
+                            iotClient.run(new String[0]);
+                        } catch (Exception e) {
+                            System.err.println("Error running IotClient: " + e.getMessage());
+                            e.printStackTrace();
+                        }
+                    }).start();
                 break;
             case "device.stop":
                 System.out.println("서비스 중단 명령 수신");
                 isReadytoSend = false;
+                iotClient.setReadytoRun(isReadytoSend);
 
                 // 실제 서비스 중단 로직 구현
                 break;
@@ -133,7 +141,13 @@ public void onOpen(Session session) {
     this.session = session;
     sendMessage(MessageType.EVENT, "connected", "");
     sendMessage(MessageType.REQUEST, "device need device_id", "");
-    
+    // Start IotClient.main statically with an empty args array and handle checked exceptions.
+    try {
+        IotClient.main(new String[0]);
+    } catch (Exception e) {
+        System.err.println("Error starting IotClient: " + e.getMessage());
+        e.printStackTrace();
+    }
 }
 
 // 서버와 연결이 종료되었을 때

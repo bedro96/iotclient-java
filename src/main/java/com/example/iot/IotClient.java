@@ -26,11 +26,6 @@ public class IotClient{
     // MQTT 권장 (방화벽 포트 8883 필요) [5](https://learn.microsoft.com/en-us/azure/iot/tutorial-send-telemetry-iot-hub)
     private static final IotHubClientProtocol PROTOCOL = IotHubClientProtocol.MQTT;
     
-    // DeviceClient instance - initialized when connection string is set
-    private DeviceClient client = null;
-    // Internal worker thread when started via start()
-    private Thread workerThread = null;
-    
     // Retry configuration
     private int INITIAL_RETRY_DELAY_SECONDS = 30;
     private int MAX_RETRY_DELAY_SECONDS = 960; // Max ~16 minutes
@@ -39,45 +34,50 @@ public class IotClient{
     // Scheduler for async retry operations
     private static final ScheduledExecutorService retryScheduler = Executors.newScheduledThreadPool(1);
     public void run(String[] args) throws Exception {
-        if (IOTHUB_DEVICE_CONNECTION_STRING == null || IOTHUB_DEVICE_CONNECTION_STRING.isBlank()) {
-            System.err.println("환경변수 IOTHUB_DEVICE_CONNECTION_STRING이 설정되지 않았습니다.");
-            System.err.println("예) export IOTHUB_DEVICE_CONNECTION_STRING=\"HostName=...;DeviceId=...;SharedAccessKey=...\"");
-            System.exit(1);
+        while (isReadytoRun) {
+            if (IOTHUB_DEVICE_CONNECTION_STRING == null || IOTHUB_DEVICE_CONNECTION_STRING.isBlank()) {
+                System.err.println("환경변수 IOTHUB_DEVICE_CONNECTION_STRING이 설정되지 않았습니다.");
+                System.err.println("예) export IOTHUB_DEVICE_CONNECTION_STRING=\"HostName=...;DeviceId=...;SharedAccessKey=...\"");
+                System.exit(1);
+            }
+
+            DeviceClient client = new DeviceClient(IOTHUB_DEVICE_CONNECTION_STRING, PROTOCOL);
+
+            // Graceful shutdown hook
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                try { 
+                    retryScheduler.shutdown();
+                    client.close(); 
+                } catch (Exception ignored) {}
+            }));
+
+            // Connect with retry logic with exponential backoff
+            connectWithRetry(client);
+
+            // 간단한 텔레메트리 5건 전송
+            CountDownLatch latch = new CountDownLatch(5);
+            for (int i = 0; i < 5; i++) {
+                String payload = String.format(
+                    "{\"temp\": %d, \"ts\": \"%s\", \"deviceId\": \"%s\", \"modelId\": \"%s\"}",
+                    20 + i, Instant.now(), DEVICE_ID, MODEL_ID);
+                Message msg = new Message(payload.getBytes(StandardCharsets.UTF_8));
+                msg.setContentType("application/json");
+                msg.setProperty("level", "info");
+                msg.setProperty("deviceId", DEVICE_ID);
+                msg.setProperty("modelId", MODEL_ID);
+                
+                sendMessageWithRetry(client, msg, latch);
+
+                Thread.sleep(3000);
+            }
+            latch.await();
+            System.out.println("Done. Closing.");
+            Thread.sleep(5000);
+
+            retryScheduler.shutdown();
+            client.close();
         }
-
-        DeviceClient client = new DeviceClient(IOTHUB_DEVICE_CONNECTION_STRING, PROTOCOL);
-
-        // Graceful shutdown hook
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            try { 
-                retryScheduler.shutdown();
-                client.close(); 
-            } catch (Exception ignored) {}
-        }));
-
-        // Connect with retry logic with exponential backoff
-        connectWithRetry(client);
-
-        // 간단한 텔레메트리 5건 전송
-        CountDownLatch latch = new CountDownLatch(5);
-        for (int i = 0; i < 5; i++) {
-            String payload = String.format(
-                "{\"temp\": %d, \"ts\": \"%s\", \"deviceId\": \"%s\", \"modelId\": \"%s\"}",
-                20 + i, Instant.now(), DEVICE_ID, MODEL_ID);
-            Message msg = new Message(payload.getBytes(StandardCharsets.UTF_8));
-            msg.setContentType("application/json");
-            msg.setProperty("level", "info");
-            msg.setProperty("deviceId", DEVICE_ID);
-            msg.setProperty("modelId", MODEL_ID);
-            
-            sendMessageWithRetry(client, msg, latch);
-
-            Thread.sleep(1000);
-        }
-        latch.await();
-        System.out.println("Done. Closing.");
-        retryScheduler.shutdown();
-        client.close();
+        System.out.println("IotClient stopped as isReadytoRun is false.");
     }
 
     public static void main(String[] args) throws Exception {
