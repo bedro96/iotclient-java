@@ -38,138 +38,50 @@ public class IotClient{
     
     // Scheduler for async retry operations
     private static final ScheduledExecutorService retryScheduler = Executors.newScheduledThreadPool(1);
-    // control flag for worker thread
-    private volatile boolean workerRunning = false;
-
-    public void main(String[] args) throws Exception {
-        // keep backward-compatible entry point
-        runLoop();
-    }
-
-    // Non-blocking start: spawn worker thread to run loop
-    public synchronized void start() {
-        if (workerRunning) {
-            System.out.println("IotClient worker already running");
-            return;
+    public void run(String[] args) throws Exception {
+        if (IOTHUB_DEVICE_CONNECTION_STRING == null || IOTHUB_DEVICE_CONNECTION_STRING.isBlank()) {
+            System.err.println("환경변수 IOTHUB_DEVICE_CONNECTION_STRING이 설정되지 않았습니다.");
+            System.err.println("예) export IOTHUB_DEVICE_CONNECTION_STRING=\"HostName=...;DeviceId=...;SharedAccessKey=...\"");
+            System.exit(1);
         }
-        workerRunning = true;
-        workerThread = new Thread(() -> {
-            try {
-                runLoop();
-            } catch (Exception e) {
-                System.err.println("IotClient worker exception: " + e.getMessage());
-                e.printStackTrace();
-            } finally {
-                workerRunning = false;
-            }
-        }, "IotClient-Worker");
-        workerThread.setDaemon(true);
-        workerThread.start();
-    }
 
-    // Stop the worker (best-effort)
-    public synchronized void stop() {
-        workerRunning = false;
-        if (workerThread != null) {
-            try {
-                workerThread.interrupt();
-            } catch (Exception ignored) {}
-        }
-        if (client != null) {
-            try { client.close(); } catch (Exception ignored) {}
-            client = null;
-        }
-        retryScheduler.shutdownNow();
-    }
-
-    public String getWorkerState() {
-        return workerThread != null ? workerThread.getState().toString() : "NOT_STARTED";
-    }
-
-    // The main loop extracted for use by both main() and worker thread
-    private void runLoop() throws Exception {
-        // Initialize connection string from environment if not already set
-        if (IOTHUB_DEVICE_CONNECTION_STRING == null) {
-            String envConnectionString = System.getenv("IOTHUB_DEVICE_CONNECTION_STRING");
-            if (envConnectionString != null && !envConnectionString.isBlank()) {
-                setIothubConnectionString(envConnectionString);
-            }
-        }
+        DeviceClient client = new DeviceClient(IOTHUB_DEVICE_CONNECTION_STRING, PROTOCOL);
 
         // Graceful shutdown hook
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            try {
+            try { 
                 retryScheduler.shutdown();
-                if (client != null) {
-                    client.close();
-                }
+                client.close(); 
             } catch (Exception ignored) {}
         }));
 
-        Instant lastActivityTime = Instant.now();
+        // Connect with retry logic with exponential backoff
+        connectWithRetry(client);
 
-        while (workerRunning || Thread.currentThread().isInterrupted() == false) {
-            // stop condition
-            if (!workerRunning) break;
+        // 간단한 텔레메트리 5건 전송
+        CountDownLatch latch = new CountDownLatch(5);
+        for (int i = 0; i < 5; i++) {
+            String payload = String.format(
+                "{\"temp\": %d, \"ts\": \"%s\", \"deviceId\": \"%s\", \"modelId\": \"%s\"}",
+                20 + i, Instant.now(), DEVICE_ID, MODEL_ID);
+            Message msg = new Message(payload.getBytes(StandardCharsets.UTF_8));
+            msg.setContentType("application/json");
+            msg.setProperty("level", "info");
+            msg.setProperty("deviceId", DEVICE_ID);
+            msg.setProperty("modelId", MODEL_ID);
+            
+            sendMessageWithRetry(client, msg, latch);
 
-            // Wait until connection string is set and ready to run
-            if (this.isReadytoRun && IOTHUB_DEVICE_CONNECTION_STRING != null && !IOTHUB_DEVICE_CONNECTION_STRING.isBlank()) {
-                // Initialize DeviceClient if not already created
-                if (client == null) {
-                    System.out.println("Initializing IoT Hub Device Client...");
-                    client = new DeviceClient(IOTHUB_DEVICE_CONNECTION_STRING, PROTOCOL);
-                    // Connect with retry logic with exponential backoff
-                    connectWithRetry(client);
-                }
-
-                // Update activity time
-                lastActivityTime = Instant.now();
-
-                // Send telemetry messages
-                // 간단한 텔레메트리 5건 전송
-                CountDownLatch latch = new CountDownLatch(5);
-                for (int i = 0; i < 5 && workerRunning; i++) {
-                    String payload = String.format(
-                        "{\"temp\": %d, \"ts\": \"%s\", \"deviceId\": \"%s\", \"modelId\": \"%s\"}",
-                        20 + i, Instant.now(), DEVICE_ID, MODEL_ID);
-                    Message msg = new Message(payload.getBytes(StandardCharsets.UTF_8));
-                    msg.setContentType("application/json");
-                    msg.setProperty("level", "info");
-                    msg.setProperty("deviceId", DEVICE_ID);
-                    msg.setProperty("modelId", MODEL_ID);
-
-                    sendMessageWithRetry(client, msg, latch);
-
-                    try { Thread.sleep(10000); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
-                }
-                try { latch.await(); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
-
-                System.out.println("Batch of 5 messages sent. Continuing...");
-            } else {
-                // Wait for connection string and ready flag
-                if (IOTHUB_DEVICE_CONNECTION_STRING == null || IOTHUB_DEVICE_CONNECTION_STRING.isBlank()) {
-                    System.out.println("Waiting for IOTHUB_DEVICE_CONNECTION_STRING to be set...");
-                } else if (!isReadytoRun) {
-                    System.out.println("Waiting for isReadytoRun flag...");
-                }
-
-                try { Thread.sleep(5000); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
-
-                // Check if idle for too long
-                if (Instant.now().minusSeconds(MAX_RETRY_DELAY_SECONDS).isAfter(lastActivityTime)) {
-                    System.out.println("Idle 상태로 MAX_RETRY_DELAY_SECONDS 경과하여 종료합니다.");
-                    break;
-                }
-            }
+            Thread.sleep(1000);
         }
-                System.out.println("Done. Closing.");
-        
-        // cleanup
-        try { retryScheduler.shutdown(); } catch (Exception ignored) {}
-        if (client != null) {
-            try { client.close(); } catch (Exception ignored) {}
-            client = null;
-        }
+        latch.await();
+        System.out.println("Done. Closing.");
+        retryScheduler.shutdown();
+        client.close();
+    }
+
+    public static void main(String[] args) throws Exception {
+        new IotClient().run(args);
     }
     
     /**
@@ -253,18 +165,6 @@ public class IotClient{
             System.err.println("Invalid connection string provided.");
             return;
         }
-        
-        // If client already exists, close it before re-initializing
-        if (this.client != null) {
-            try {
-                System.out.println("Closing existing client before updating connection string...");
-                this.client.close();
-                this.client = null;
-            } catch (Exception e) {
-                System.err.println("Error closing existing client: " + e.getMessage());
-            }
-        }
-        
         this.IOTHUB_DEVICE_CONNECTION_STRING = connectionString;
         System.out.println("IoT Hub connection string updated successfully.");
     }

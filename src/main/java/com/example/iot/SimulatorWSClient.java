@@ -76,13 +76,13 @@ public void onMessage(String message) {
                 
                 // 실제 서비스 시작 로직 구현
                 break;
-        case "device.stop":
+            case "device.stop":
                 System.out.println("서비스 중단 명령 수신");
                 isReadytoSend = false;
 
                 // 실제 서비스 중단 로직 구현
                 break;
-        case "device.config.update":
+            case "device.config.update":
                 System.out.println("구성 업데이트 명령 수신");
                 if (json.has("payload")) {
                     JsonNode payload = json.get("payload");
@@ -116,15 +116,9 @@ public void onMessage(String message) {
                 }   
                 // 구성 업데이트 로직 구현
                 break;
-            default:
-                System.out.println("알 수 없는 명령: '" + action + "'");
-                System.out.println("전체 JSON: " + json.toString());
         }
-        
+        sendMessage(MessageType.EVENT, "processed:" + action, "");
         // 서버에 결과/상태 보고 (예시)
-        if (!action.isEmpty()) {
-            sendMessage(MessageType.EVENT, "processed:" + action, "");
-        }
     } catch (Exception e) {
         System.err.println("메시지 처리 중 오류 발생:");
         e.printStackTrace();
