@@ -25,6 +25,7 @@ public class SimulatorWSClient {
 private static final String SERVER_URI = "wss://iot-service-server.wonderfulrock-1223eeed.koreacentral.azurecontainerapps.io/ws/";
 // private String DEVICE_ID = "device123"; // 실제 환경에서는 서버에서 받아올 수 있음
 private static final String DEVICE_UUID = get_UuidString();
+private static final Thread threadInvoked;
 private String IOTHUB_DEVICE_CONNECTION_STRING;
 private String received_DEVICE_ID;
 private int initialRetryTimeout;
@@ -87,8 +88,9 @@ public void onMessage(String message) {
                 System.out.println("서비스 중단 명령 수신");
                 isReadytoSend = false;
                 iotClient.setReadytoRun(isReadytoSend);
+                // iotClient.run 중단시키도록 처리, 별도로 실행된 스레드에서 감지하여 종료
 
-                // 실제 서비스 중단 로직 구현
+
                 break;
             case "device.config.update":
                 System.out.println("구성 업데이트 명령 수신");

@@ -68,11 +68,11 @@ public class IotClient{
                 
                 sendMessageWithRetry(client, msg, latch);
 
-                Thread.sleep(3000);
+                Thread.sleep(5000);
             }
             latch.await();
             System.out.println("Done. Closing.");
-            Thread.sleep(5000);
+            Thread.sleep(10000);
 
             retryScheduler.shutdown();
             client.close();
