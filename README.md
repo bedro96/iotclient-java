@@ -271,7 +271,7 @@ The Dockerfile uses:
 ### Common Issues
 
 1. **Connection String Not Set**
-   - Error: `환경변수 IOTHUB_DEVICE_CONNECTION_STRING이 설정되지 않았습니다.`
+   - Error: `환경변수 IOTHUB_DEVICE_CONNECTION_STRING이 설정되지 않았습니다.` (Korean: "Environment variable IOTHUB_DEVICE_CONNECTION_STRING is not set")
    - Solution: Set the `IOTHUB_DEVICE_CONNECTION_STRING` environment variable
 
 2. **WebSocket Connection Failed**
