@@ -25,7 +25,6 @@ public class SimulatorWSClient {
 private static final String SERVER_URI = "wss://iot-service-server.wonderfulrock-1223eeed.koreacentral.azurecontainerapps.io/ws/";
 // private String DEVICE_ID = "device123"; // 실제 환경에서는 서버에서 받아올 수 있음
 private static final String DEVICE_UUID = get_UuidString();
-private static final Thread threadInvoked;
 private String IOTHUB_DEVICE_CONNECTION_STRING;
 private String received_DEVICE_ID;
 private int initialRetryTimeout;
