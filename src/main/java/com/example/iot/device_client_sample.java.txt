@@ -1,32 +1,50 @@
-import com.microsoft.azure.sdk.iot.device.*;
 
-public class App {
-    public static void main(String[] args) throws Exception {
-        String hostName = "<your-iot-hub>.azure-devices.net";
-        String deviceId = "<your-device-id>";
-        String sharedAccessKey = "<your-device-key>";
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 
-        // SAS Token Provider 생성 (1시간 유효)
-        SimpleSasTokenProvider tokenProvider =
-                new SimpleSasTokenProvider(hostName, deviceId, sharedAccessKey, 3600);
+public class PostJsonWithJackson {
+    // DTO 클래스 정의
+    static class User {
+        public String name;
+        public String role;
 
-        // DeviceClient 생성
-        DeviceClient client = new DeviceClient(
-                hostName,
-                deviceId,
-                tokenProvider,
-                IotHubClientProtocol.MQTT
-        );
+        public User(String name, String role) {
+            this.name = name;
+            this.role = role;
+        }
+    }
 
-        client.open(true);
+    public static void main(String[] args) {
+        try {
+            // 1. HttpClient 생성
+            HttpClient client = HttpClient.newHttpClient();
 
-        // Test message
-        Message msg = new Message("Hello from JRE 21 using SAS Token Provider!");
-        client.sendEventAsync(msg, (responseStatus, callbackContext) -> {
-            System.out.println("Send Status = " + responseStatus.name());
-        }, null);
+            // 2. Jackson ObjectMapper 생성
+            ObjectMapper mapper = new ObjectMapper();
 
-        Thread.sleep(3000);
-        client.close();
+            // 3. Java 객체 -> JSON 문자열 변환
+            User user = new User("Kun Ho Ko", "Sr Sol Engineer Mgmt");
+            String jsonBody = mapper.writeValueAsString(user);
+
+            // 4. HttpRequest 생성
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("https://api.example.com/data"))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+                    .build();
+
+            // 5. 요청 실행 및 응답 받기
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+            // 6. 응답 출력
+            System.out.println("Status Code: " + response.statusCode());
+            System.out.println("Response Body: " + response.body());
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }
