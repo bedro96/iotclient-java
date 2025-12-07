@@ -186,13 +186,13 @@ public class SimulatorWSClient {
         sendMessage(MessageType.EVENT, "connected", "");
         sendMessage(MessageType.REQUEST, "device need device_id", "");
         // Start IotClient worker (non-blocking) and save Future for cancellation
-        try {
-            iotWorkerFuture = iotClient.start();
-            System.out.println("iotClient.start() called from onOpen; future saved");
-        } catch (Exception e) {
-            System.err.println("Error starting IotClient: " + e.getMessage());
-            e.printStackTrace();
-        }
+        // try {
+        // iotWorkerFuture = iotClient.start();
+        // System.out.println("iotClient.start() called from onOpen; future saved");
+        // } catch (Exception e) {
+        // System.err.println("Error starting IotClient: " + e.getMessage());
+        // e.printStackTrace();
+        // }
     }
 
     // 서버와 연결이 종료되었을 때

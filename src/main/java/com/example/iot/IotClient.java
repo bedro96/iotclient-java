@@ -17,7 +17,7 @@ public class IotClient {
     // Device identification
     private String DEVICE_ID = System.getenv().getOrDefault("DEVICE_ID", "javadevice001");
     private boolean isReadytoRun = false;
-    private static final String MODEL_ID = System.getenv().getOrDefault("MODEL_ID", "dtmi:com:example:iotdevice");
+    private static final String MODEL_ID = System.getenv().getOrDefault("MODEL_ID", "dtmi:iotdevice");
 
     // 보안을 위해 환경변수로 받아 사용 (직접 문자열 하드코딩 지양)
     // 설정: export
@@ -40,6 +40,7 @@ public class IotClient {
     private java.util.concurrent.ExecutorService workerExecutor = null;
     private java.util.concurrent.Future<?> workerFuture = null;
     private volatile boolean workerRunning = false;
+    private IotDeviceStatus iotdevicestatus;
 
     public void run(String[] args) throws Exception {
         // backward compatible wrapper
@@ -61,7 +62,10 @@ public class IotClient {
                 continue;
             }
 
+            System.out.println("[IotClient] Creating DeviceClient instance...");
             DeviceClient client = new DeviceClient(IOTHUB_DEVICE_CONNECTION_STRING, PROTOCOL);
+            System.out.println(
+                    "[IotClient] DeviceClient created: " + client + " (hash=" + System.identityHashCode(client) + ")");
 
             // Graceful shutdown hook
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
@@ -74,13 +78,16 @@ public class IotClient {
 
             // Connect with retry logic with exponential backoff
             connectWithRetry(client);
+            iotdevicestatus = new IotDeviceStatus();
+            System.out.println("[IotClient] DeviceStatus initialized: " + iotdevicestatus);
 
             // 간단한 텔레메트리 10건 전송
             CountDownLatch latch = new CountDownLatch(10);
             for (int i = 0; i < 10 && workerRunning; i++) {
                 String payload = String.format(
-                        "{\"temp\": %d, \"ts\": \"%s\", \"deviceId\": \"%s\", \"modelId\": \"%s\"}",
-                        20 + i, Instant.now(), DEVICE_ID, MODEL_ID);
+                        "{\"deviceId\": \"%s\", \"Type\": \"Thermo-hygrometer\", \"modelId\": %s, \"Status\": %s, \"temp\": %d, \"Humidity\": %d, \"ts\": \"%s\", }",
+                        DEVICE_ID, MODEL_ID, iotdevicestatus.getDeviceStatus(), iotdevicestatus.getDeviceTemperature(),
+                        iotdevicestatus.getDeviceHumidity(), Instant.now());
                 Message msg = new Message(payload.getBytes(StandardCharsets.UTF_8));
                 msg.setContentType("application/json");
                 msg.setProperty("level", "info");
@@ -194,7 +201,10 @@ public class IotClient {
             int currentRetry, int currentDelay) {
         client.sendEventAsync(msg, (sentMessage, clientException, callbackContext) -> {
             if (clientException == null) {
+                System.out.println("================================");
                 System.out.printf("Message ack: SUCCESS%n");
+                System.out.println("Payload: " + new String(sentMessage.getBytes(), StandardCharsets.UTF_8));
+                System.out.println("================================");
                 latch.countDown();
             } else {
                 if (currentRetry < MAX_RETRIES) {
