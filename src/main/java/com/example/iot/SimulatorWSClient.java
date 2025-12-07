@@ -29,6 +29,7 @@ private String IOTHUB_DEVICE_CONNECTION_STRING;
 private String received_DEVICE_ID;
 private int initialRetryTimeout;
 private int maxRetry;
+private int messageIntervalSeconds;
 private enum MessageType {
     REQUEST("request"),
     RESPONSE("response"),
@@ -88,8 +89,23 @@ public void onMessage(String message) {
                 isReadytoSend = false;
                 iotClient.setReadytoRun(isReadytoSend);
                 // iotClient.run 중단시키도록 처리, 별도로 실행된 스레드에서 감지하여 종료
-
-
+                break;
+            case "device.restart":
+                System.out.println("서비스 재시작 명령 수신");
+                isReadytoSend = false;
+                iotClient.setReadytoRun(isReadytoSend);
+                // 잠시 대기 후 재시작
+                Thread.sleep(2000);
+                isReadytoSend = true;
+                iotClient.setReadytoRun(isReadytoSend);
+                new Thread(() -> {
+                    try {
+                        iotClient.run(new String[0]);
+                    } catch (Exception e) {
+                        System.err.println("Error running IotClient: " + e.getMessage());
+                        e.printStackTrace();
+                    }
+                }).start();
                 break;
             case "device.config.update":
                 System.out.println("구성 업데이트 명령 수신");
@@ -119,6 +135,11 @@ public void onMessage(String message) {
                         maxRetry = payload.get("maxRetry").asInt();
                         if (iotClient != null) iotClient.setMaxRetries(maxRetry);
                         System.out.println("구성 업데이트 - max_retry: " + maxRetry);
+                    }
+                    if (payload.has("messageIntervalSeconds")) {
+                        messageIntervalSeconds = payload.get("messageIntervalSeconds").asInt();
+                        if (iotClient != null) iotClient.setMessageIntervalSeconds(messageIntervalSeconds);
+                        System.out.println("구성 업데이트 - message_interval_seconds: " + messageIntervalSeconds);
                     }
                     isReadytoSend = true;
                     // 추가 구성 파라미터 처리 가능
@@ -192,7 +213,7 @@ public void sendMessage(MessageType messageType, String status, String correlati
         node.put("ts", TIMESTAMP);
         node.put("action", "");
         node.put("status", status);
-        node.put("payload", objectMapper.createObjectNode().put("DEVICE_UUID", DEVICE_UUID));
+        node.set("payload", objectMapper.createObjectNode().put("DEVICE_UUID", DEVICE_UUID));
         node.set("meta", objectMapper.createObjectNode().put("source", "simulator"));
         String json = node.toString();
         session.getAsyncRemote().sendText(json);
@@ -231,14 +252,7 @@ public String get_Timestamp() {
     java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ISO_INSTANT;
     return formatter.format(java.time.Instant.now());
 }
-// private MessageType getMessage_typEnum() {
-//     return message_typEnum;
-// }
 
-// private void setMessage_typEnum(MessageType message_typEnum) {
-//     this.message_typEnum = message_typEnum;
-// }
-}
 
 
 

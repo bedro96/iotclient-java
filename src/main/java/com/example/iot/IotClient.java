@@ -30,6 +30,7 @@ public class IotClient{
     private int INITIAL_RETRY_DELAY_SECONDS = 30;
     private int MAX_RETRY_DELAY_SECONDS = 960; // Max ~16 minutes
     private int MAX_RETRIES = 10;
+    private int MESSAGE_INTERVAL_SECONDS = 5;
     
     // Scheduler for async retry operations
     private static final ScheduledExecutorService retryScheduler = Executors.newScheduledThreadPool(1);
@@ -54,9 +55,9 @@ public class IotClient{
             // Connect with retry logic with exponential backoff
             connectWithRetry(client);
 
-            // 간단한 텔레메트리 5건 전송
-            CountDownLatch latch = new CountDownLatch(5);
-            for (int i = 0; i < 5; i++) {
+            // 간단한 텔레메트리 10건 전송
+            CountDownLatch latch = new CountDownLatch(10);
+            for (int i = 0; i < 10; i++) {
                 String payload = String.format(
                     "{\"temp\": %d, \"ts\": \"%s\", \"deviceId\": \"%s\", \"modelId\": \"%s\"}",
                     20 + i, Instant.now(), DEVICE_ID, MODEL_ID);
@@ -68,7 +69,7 @@ public class IotClient{
                 
                 sendMessageWithRetry(client, msg, latch);
 
-                Thread.sleep(5000);
+                Thread.sleep(MESSAGE_INTERVAL_SECONDS * 1000L);
             }
             latch.await();
             System.out.println("Done. Closing.");
@@ -159,6 +160,9 @@ public class IotClient{
     }
     public void setMaxRetryDelaySeconds(int seconds) {
         this.MAX_RETRY_DELAY_SECONDS = seconds;
+    }
+    public void setMessageIntervalSeconds(int seconds) {
+        this.MESSAGE_INTERVAL_SECONDS = seconds;
     }
     public void setIothubConnectionString(String connectionString) {
         if (connectionString == null || connectionString.isBlank()) {
