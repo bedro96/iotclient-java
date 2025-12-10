@@ -85,7 +85,7 @@ public class IotClient {
             CountDownLatch latch = new CountDownLatch(10);
             for (int i = 0; i < 10 && workerRunning; i++) {
                 String payload = String.format(
-                        "{\"deviceId\": \"%s\", \"Type\": \"Thermo-hygrometer\", \"modelId\": %s, \"Status\": %s, \"temp\": %d, \"Humidity\": %d, \"ts\": \"%s\", }",
+                        "{\"deviceId\": \"%s\", \"Type\": \"Thermo-hygrometer\", \"modelId\": \"%s\", \"Status\": \"%s\", \"temp\": %d, \"Humidity\": %d, \"ts\": \"%s\"}",
                         DEVICE_ID, MODEL_ID, iotdevicestatus.getDeviceStatus(), iotdevicestatus.getDeviceTemperature(),
                         iotdevicestatus.getDeviceHumidity(), Instant.now());
                 Message msg = new Message(payload.getBytes(StandardCharsets.UTF_8));
