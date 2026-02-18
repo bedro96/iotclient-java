@@ -53,7 +53,8 @@ The application consists of two main components:
 ```
 src/main/java/com/example/iot/
 ├── SimulatorWSClient.java  # Main entry point - WebSocket client
-└── IotClient.java          # Azure IoT Hub device client
+├── IotClient.java          # Azure IoT Hub device client
+└── IotDeviceStatus.java    # Device status and sensor data generator
 ```
 
 ## Class Details
@@ -81,6 +82,7 @@ The main entry point of the application. A WebSocket client that connects to a r
 |--------|-------------|
 | `device.start` | Starts the IotClient to begin sending telemetry |
 | `device.stop` | Stops the IotClient from sending telemetry |
+| `device.restart` | Restarts the IotClient (stops, waits 2 seconds, then starts) |
 | `device.config.update` | Updates device configuration from payload |
 
 **Configuration Update Payload Fields:**
@@ -90,6 +92,7 @@ The main entry point of the application. A WebSocket client that connects to a r
 | `IOTHUB_DEVICE_CONNECTION_STRING` | Sets the Azure IoT Hub connection string |
 | `initialRetryTimeout` | Sets initial retry delay in seconds |
 | `maxRetry` | Sets maximum number of retry attempts |
+| `messageIntervalSeconds` | Sets interval between telemetry messages in seconds (default: 5) |
 
 **Message Types (MessageType enum):**
 | Type | Value | Usage |
@@ -123,35 +126,44 @@ Azure IoT Hub device client that sends telemetry data using MQTT protocol.
 - MQTT protocol for communication (port 8883)
 - Exponential backoff retry for both connection and message sending
 - Configurable through setter methods
+- Non-blocking start/stop lifecycle management using ExecutorService
+- Generates realistic sensor data using IotDeviceStatus
 
 **Default Configuration Values:**
 | Parameter | Default Value | Description |
 |-----------|---------------|-------------|
 | `DEVICE_ID` | `"javadevice001"` | Device identifier (from env `DEVICE_ID`) |
-| `MODEL_ID` | `"dtmi:com:example:iotdevice"` | Device model identifier (from env `MODEL_ID`) |
+| `MODEL_ID` | `"dtmi:iotdevice"` | Device model identifier (from env `MODEL_ID`) |
 | `PROTOCOL` | `MQTT` | IoT Hub client protocol |
 | `INITIAL_RETRY_DELAY_SECONDS` | `30` | Initial retry delay |
 | `MAX_RETRY_DELAY_SECONDS` | `960` | Maximum retry delay (~16 minutes) |
 | `MAX_RETRIES` | `10` | Maximum number of retry attempts |
+| `MESSAGE_INTERVAL_SECONDS` | `5` | Interval between telemetry messages |
 
 **Public Methods:**
 | Method | Parameters | Description |
 |--------|------------|-------------|
 | `run(String[] args)` | args: command line arguments | Main loop that connects to IoT Hub and sends telemetry |
+| `start()` | None | Starts the IotClient worker in a separate thread (non-blocking). Returns Future for cancellation |
+| `stop()` | None | Stops the IotClient worker and shuts down the executor |
 | `setDeviceString(String)` | deviceId | Sets the device identifier |
 | `setReadytoRun(boolean)` | ready | Controls whether the run loop should execute |
 | `setInitialRetryDelaySeconds(int)` | seconds | Sets initial retry delay |
 | `setMaxRetries(int)` | maxRetries | Sets maximum retry attempts |
 | `setMaxRetryDelaySeconds(int)` | seconds | Sets maximum retry delay |
+| `setMessageIntervalSeconds(int)` | seconds | Sets interval between telemetry messages |
 | `setIothubConnectionString(String)` | connectionString | Sets IoT Hub connection string |
 
 **Telemetry Message Format:**
 ```json
 {
-  "temp": 20,
-  "ts": "2024-01-01T00:00:00.000Z",
   "deviceId": "javadevice001",
-  "modelId": "dtmi:com:example:iotdevice"
+  "Type": "Thermo-hygrometer",
+  "modelId": "dtmi:iotdevice",
+  "Status": "online",
+  "temp": 25,
+  "Humidity": 50,
+  "ts": "2024-01-01T00:00:00.000Z"
 }
 ```
 
@@ -166,6 +178,36 @@ Azure IoT Hub device client that sends telemetry data using MQTT protocol.
 **Retry Logic:**
 - Connection retry: Exponential backoff starting at 30 seconds, doubling each attempt up to 960 seconds, maximum 10 attempts
 - Message send retry: Same exponential backoff pattern, uses async scheduler to avoid blocking callback threads
+
+### IotDeviceStatus.java
+
+Device status and sensor data generator that simulates a thermo-hygrometer device.
+
+**Key Features:**
+- Generates realistic temperature and humidity values using Gaussian distribution
+- Automatically determines device status based on sensor readings
+- Thread-safe random number generation
+
+**Device Status Values:**
+| Status | Condition | Description |
+|--------|-----------|-------------|
+| `online` | Normal operation | Temperature ≤ 30°C and Humidity ≤ 70% |
+| `warning` | Threshold exceeded | Temperature > 30°C or Humidity > 70% |
+| `offline` | Not connected | Device is not connected (not currently used) |
+| `maintenance` | Under maintenance | Device is being serviced (not currently used) |
+
+**Sensor Data Generation:**
+| Sensor | Mean | Standard Deviation | Description |
+|--------|------|-------------------|-------------|
+| Temperature | 25°C | ±5°C | Uses Gaussian distribution to generate realistic temperature values |
+| Humidity | 50% | ±10% | Uses Gaussian distribution to generate realistic humidity values |
+
+**Public Methods:**
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `getDeviceTemperature()` | int | Returns the current temperature reading |
+| `getDeviceHumidity()` | int | Returns the current humidity reading |
+| `getDeviceStatus()` | String | Returns the device status ("online", "warning", "offline", or "maintenance") |
 
 ## Configuration
 
@@ -197,7 +239,8 @@ Configuration can be updated remotely by sending a `device.config.update` comman
     "device_id": "new-device-id",
     "IOTHUB_DEVICE_CONNECTION_STRING": "HostName=...;DeviceId=...;SharedAccessKey=...",
     "initialRetryTimeout": 60,
-    "maxRetry": 5
+    "maxRetry": 5,
+    "messageIntervalSeconds": 10
   }
 }
 ```
@@ -265,6 +308,49 @@ The Dockerfile uses:
 |------|----------|-----------|---------|
 | 443 | WSS | Outbound | WebSocket connection to IoT service server |
 | 8883 | MQTT | Outbound | Azure IoT Hub communication |
+
+## CI/CD Pipeline
+
+The repository includes a GitHub Actions workflow for continuous integration and deployment to Azure Container Registry.
+
+**Workflow Features:**
+- Automatically triggered on push/PR to main branch
+- Builds Java application with Maven
+- Creates and pushes Docker image to Azure Container Registry (ACR)
+- Uses OIDC authentication for secure Azure access
+- Implements dependency graph submission for security alerts
+
+**Azure Resources Required:**
+| Resource | Purpose |
+|----------|---------|
+| Azure Container Registry | Stores Docker images |
+| Service Principal with OIDC | Authenticates GitHub Actions to Azure |
+| Resource Group | Contains Azure resources |
+
+**GitHub Secrets Required:**
+| Secret | Description |
+|--------|-------------|
+| `AZURE_CLIENT_ID` | Azure service principal client ID |
+| `AZURE_TENANT_ID` | Azure tenant ID |
+| `AZURE_SUBSCRIPTION_ID` | Azure subscription ID |
+
+**Docker Image Tags:**
+The workflow generates the following tags:
+- Git commit SHA (long format)
+- Branch name (for branch pushes)
+- PR reference (for pull requests)
+- `latest` (for main branch only)
+
+**Workflow File:**
+`.github/workflows/maven.yml`
+
+**Registry Configuration:**
+| Parameter | Default Value |
+|-----------|---------------|
+| Registry Name | `kunhoregistry` |
+| Image Name | `iot-client-java21` |
+| Resource Group | `fastcmp-rg` |
+| Platform | `linux/amd64` |
 
 ## Troubleshooting
 
