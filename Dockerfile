@@ -18,7 +18,7 @@ USER appuser
 
 # Allow runtime override of Java options and the IoT hub connection string
 ENV JAVA_OPTS=""
-ENV IOTHUB_DEVICE_CONNECTION_STRING="HostName=s1toptest01.azure-devices.net;DeviceId=javadevice001;SharedAccessKey=pb4CJgdsz1mGnnvSy7LOt6qLx+0xU6jQCYjkThvWjlY="
+ENV IOTHUB_DEVICE_CONNECTION_STRING=""
 
 # The application makes outbound connections (MQTT 8883) — no ports need to be exposed for basic operation
 # EXPOSE 8883
