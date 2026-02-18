@@ -64,7 +64,7 @@ public class SimulatorWSClient {
     // handle to running worker so we can cancel it
     private static java.util.concurrent.Future<?> iotWorkerFuture = null;
 
-    // 서버로부터 명령 수신
+    // 서버로부터 명령 수신  
     @OnMessage
     public void onMessage(String message) {
         System.out.println("=== @OnMessage triggered ===");
