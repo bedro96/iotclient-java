@@ -21,7 +21,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public class SimulatorWSClient {
 
     // 서버 주소 및 deviceId (필요에 따라 동적으로 할당 가능)
-    private static final String SERVER_URI = "wss://iothub-controller.orangebush-c16220a0.koreacentral.azurecontainerapps.io/ws/"
+    private static final String SERVER_URI = "wss://iothub-controller.orangebush-c16220a0.koreacentral.azurecontainerapps.io/ws/";
     // private static final String SERVER_URI = "ws://kukovm.westus2.cloudapp.azure.com:3000/ws/";
     // private static final String SERVER_URI = "wss://iot-service-server.wonderfulrock-1223eeed.koreacentral.azurecontainerapps.io/ws/";
     // private String DEVICE_ID = "device123"; // 실제 환경에서는 서버에서 받아올 수 있음

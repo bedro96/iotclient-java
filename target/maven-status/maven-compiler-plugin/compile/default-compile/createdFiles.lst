@@ -1,0 +1,5 @@
+com/example/iot/IotClient.class
+com/example/iot/IotDeviceStatus$Status.class
+com/example/iot/IotDeviceStatus.class
+com/example/iot/SimulatorWSClient$MessageType.class
+com/example/iot/SimulatorWSClient.class
