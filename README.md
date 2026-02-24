@@ -278,9 +278,6 @@ mvn clean package
 ### Running Locally
 
 ```bash
-# Set required environment variable
-export IOTHUB_DEVICE_CONNECTION_STRING="HostName=...;DeviceId=...;SharedAccessKey=..."
-
 # Run the application
 java -jar target/iot-device-java21-1.0-SNAPSHOT.jar
 ```
@@ -292,7 +289,7 @@ java -jar target/iot-device-java21-1.0-SNAPSHOT.jar
 docker build -t iot-client-java .
 
 # Run container
-docker run -e IOTHUB_DEVICE_CONNECTION_STRING="HostName=...;DeviceId=...;SharedAccessKey=..." iot-client-java
+docker run iot-client-java
 ```
 
 ### Docker Configuration
@@ -344,31 +341,19 @@ The workflow generates the following tags:
 **Workflow File:**
 `.github/workflows/maven.yml`
 
-**Registry Configuration:**
-| Parameter | Default Value |
-|-----------|---------------|
-| Registry Name | `kunhoregistry` |
-| Image Name | `iot-client-java21` |
-| Resource Group | `fastcmp-rg` |
-| Platform | `linux/amd64` |
-
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Connection String Not Set**
-   - Error: `환경변수 IOTHUB_DEVICE_CONNECTION_STRING이 설정되지 않았습니다.` (Korean: "Environment variable IOTHUB_DEVICE_CONNECTION_STRING is not set")
-   - Solution: Set the `IOTHUB_DEVICE_CONNECTION_STRING` environment variable
-
-2. **WebSocket Connection Failed**
+1. **WebSocket Connection Failed**
    - Check network connectivity to the IoT service server
    - Verify firewall allows outbound connections on port 443
 
-3. **IoT Hub Connection Failed**
+2. **IoT Hub Connection Failed**
    - Verify the connection string is correct
    - Ensure firewall allows outbound connections on port 8883 (MQTT)
    - Check Azure IoT Hub service is available
 
-4. **Retry Exhausted**
+3. **Retry Exhausted**
    - Error: `Failed to connect after 10 attempts. Giving up.`
    - Check network connectivity and IoT Hub availability
