@@ -20,7 +20,7 @@ USER appuser
 ENV JAVA_OPTS=""
 ENV IOTHUB_DEVICE_CONNECTION_STRING=""
 
-# The application makes outbound connections (MQTT 8883) — no ports need to be exposed for basic operation
-# EXPOSE 8883
+# Expose health-check port for Kubernetes readinessProbe / livenessProbe
+EXPOSE 8080
 
 ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]

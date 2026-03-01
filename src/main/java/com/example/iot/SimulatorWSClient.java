@@ -249,6 +249,12 @@ public class SimulatorWSClient {
     // 클라이언트 실행
     public static void main(String[] args) {
         try {
+            HealthServer.start();
+        } catch (Exception e) {
+            System.err.println("[HealthServer] Failed to start health server: " + e.getMessage());
+            e.printStackTrace();
+        }
+        try {
             System.out.println("=== Starting WebSocket Client ===");
             System.out.println("Device UUID: " + DEVICE_UUID);
             System.out.println("Server URI: " + SERVER_URI);
